@@ -18,7 +18,7 @@ import { calculateOptimizationTargets, generateOptimizedZip } from './utils/opti
 import { packAtlases } from './utils/atlasPacker';
 import { unpackAtlas } from './utils/atlasUnpacker';
 import { parseAtlas } from './utils/atlasParser';
-import { Activity, Layers, Search, X, Zap, CheckSquare, RotateCcw, Download, Upload, Film, AlertTriangle } from 'lucide-react';
+import { Activity, Layers, Search, X, Zap, CheckSquare, RotateCcw, Download, Upload, Film, AlertTriangle, Map as MapIcon } from 'lucide-react';
 
 type SortKey = 'path' | 'originalSize' | 'maxRenderSize' | 'sourceAnimation' | 'sourceSkeleton';
 
@@ -434,6 +434,14 @@ export default function App() {
     setIsAtlasModalOpen(true);
   };
 
+  // Direct Atlas Preview Handler
+  const handleQuickAtlasPreview = () => {
+    if (!report) return;
+    const tasks = calculateOptimizationTargets(report.globalStats, processedAssets, optimizationBuffer);
+    setAtlasTasks(tasks);
+    setIsAtlasModalOpen(true);
+  };
+
   const handleBufferChange = (newBuffer: number) => {
     if (!report) return;
     setOptimizationBuffer(newBuffer);
@@ -836,7 +844,70 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* ROW 1: Actions (Save/Load and Docs/Optimize) */}
+                {/* ROW 1: Actions (Reset/Clear and Docs/Optimize) */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  {/* Left: Reset/Clear */}
+                  <div className="flex items-center gap-2">
+                    {hasUserChanges && (
+                      <button 
+                        type="button"
+                        onClick={handleResetAll}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl transition-all shadow-lg shadow-orange-900/20 active:translate-y-0.5"
+                        title="Reset all user overrides and scaling changes"
+                      >
+                        <RotateCcw size={14} />
+                        <span>Reset All</span>
+                      </button>
+                    )}
+                    {selectedKeys.size > 0 && (
+                      <button 
+                        type="button"
+                        onClick={handleClearSelection}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-xl hover:bg-gray-700 hover:text-white transition-colors"
+                      >
+                        <CheckSquare size={14} className="text-spine-accent" />
+                        <span>Clear ({selectedKeys.size})</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Right: Documentation/Optimize (Primary Actions) */}
+                  <div className="w-full md:w-[420px] flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsTrackModalOpen(true)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-gray-200 bg-gray-800 border border-gray-600 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-500 transition-all shadow-sm group"
+                    >
+                      <Film size={16} className="text-purple-400 group-hover:text-purple-300" />
+                      <span>Documentation</span>
+                    </button>
+
+                    {report.animations.length > 0 && activeImageCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleOpenOptimization}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white transition-all rounded-xl bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/20 hover:shadow-blue-900/40 hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        <Zap size={16} className="fill-current" />
+                        <span>Optimize Assets</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* NEW: Atlas Preview Utility (Own Row) */}
+                <div className="flex items-center justify-start -mb-1">
+                   <button
+                    type="button"
+                    onClick={handleQuickAtlasPreview}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-blue-200 bg-blue-900/20 border border-blue-800/50 rounded-lg hover:bg-blue-900/40 transition-colors"
+                   >
+                    <MapIcon size={14} />
+                    <span>Atlas Preview</span>
+                   </button>
+                </div>
+
+                {/* ROW 2: Secondary Controls (Save/Load and Search) */}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                   {/* Left: Save/Load */}
                   <div className="flex items-center gap-2">
@@ -868,57 +939,6 @@ export default function App() {
                         onChange={handleLoadConfig}
                       />
                     </div>
-                  </div>
-
-                  {/* Right: Documentation/Optimize (Primary Actions) */}
-                  <div className="w-full md:w-[420px] flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsTrackModalOpen(true)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-gray-200 bg-gray-800 border border-gray-600 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-500 transition-all shadow-sm group"
-                    >
-                      <Film size={16} className="text-purple-400 group-hover:text-purple-300" />
-                      <span>Documentation</span>
-                    </button>
-
-                    {report.animations.length > 0 && activeImageCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleOpenOptimization}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white transition-all rounded-xl bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/20 hover:shadow-blue-900/40 hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        <Zap size={16} className="fill-current" />
-                        <span>Optimize Assets</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ROW 2: Secondary Controls (Reset/Clear and Search) */}
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  {/* Left: Reset/Clear */}
-                  <div className="flex items-center gap-2">
-                    {hasUserChanges && (
-                      <button 
-                        type="button"
-                        onClick={handleResetAll}
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl transition-all shadow-lg shadow-orange-900/20 active:translate-y-0.5"
-                        title="Reset all user overrides and scaling changes"
-                      >
-                        <RotateCcw size={14} />
-                        <span>Reset All</span>
-                      </button>
-                    )}
-                    {selectedKeys.size > 0 && (
-                      <button 
-                        type="button"
-                        onClick={handleClearSelection}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-xl hover:bg-gray-700 hover:text-white transition-colors"
-                      >
-                        <CheckSquare size={14} className="text-spine-accent" />
-                        <span>Clear ({selectedKeys.size})</span>
-                      </button>
-                    )}
                   </div>
 
                   {/* Right: Search Field (Matched width to Docs+Optimize) */}
