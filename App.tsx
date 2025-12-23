@@ -842,20 +842,17 @@ export default function App() {
                       </span>
                     </div>
                   </div>
-                </div>
-
-                {/* ROW 1: Actions (Reset/Clear and Docs/Optimize) */}
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  {/* Left: Reset/Clear */}
+                  
+                  {/* Reset/Clear Controls moved to header line */}
                   <div className="flex items-center gap-2">
                     {hasUserChanges && (
                       <button 
                         type="button"
                         onClick={handleResetAll}
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-xl transition-all shadow-lg shadow-orange-900/20 active:translate-y-0.5"
+                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-orange-600 hover:bg-orange-500 rounded-lg transition-all shadow-sm active:translate-y-0.5"
                         title="Reset all user overrides and scaling changes"
                       >
-                        <RotateCcw size={14} />
+                        <RotateCcw size={12} />
                         <span>Reset All</span>
                       </button>
                     )}
@@ -863,15 +860,28 @@ export default function App() {
                       <button 
                         type="button"
                         onClick={handleClearSelection}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-xl hover:bg-gray-700 hover:text-white transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
                       >
-                        <CheckSquare size={14} className="text-spine-accent" />
+                        <CheckSquare size={12} className="text-spine-accent" />
                         <span>Clear ({selectedKeys.size})</span>
                       </button>
                     )}
                   </div>
+                </div>
 
-                  {/* Right: Documentation/Optimize (Primary Actions) */}
+                {/* ROW 1: Primary Actions */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  {/* Left: Atlas Preview (High Visibility) */}
+                  <button
+                    type="button"
+                    onClick={handleQuickAtlasPreview}
+                    className="w-full md:w-[260px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-gray-200 bg-gray-800 border border-gray-600 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-500 transition-all shadow-sm group"
+                  >
+                    <MapIcon size={16} className="text-blue-400 group-hover:text-blue-300" />
+                    <span>Atlas Preview</span>
+                  </button>
+
+                  {/* Right: Docs + Optimize */}
                   <div className="w-full md:w-[420px] flex items-center gap-3">
                     <button
                       type="button"
@@ -895,53 +905,39 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* NEW: Atlas Preview Utility (Own Row) */}
-                <div className="flex items-center justify-start -mb-1">
-                   <button
-                    type="button"
-                    onClick={handleQuickAtlasPreview}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-blue-200 bg-blue-900/20 border border-blue-800/50 rounded-lg hover:bg-blue-900/40 transition-colors"
-                   >
-                    <MapIcon size={14} />
-                    <span>Atlas Preview</span>
-                   </button>
-                </div>
-
-                {/* ROW 2: Secondary Controls (Save/Load and Search) */}
+                {/* ROW 2: Secondary Controls */}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  {/* Left: Save/Load */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={handleSaveConfig}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                        title="Save Configuration"
-                      >
-                        <Download size={14} />
-                        <span className="hidden sm:inline">Save</span>
-                      </button>
-                      <div className="w-px h-4 bg-gray-700 mx-1"></div>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                        title="Load Configuration"
-                      >
-                        <Upload size={14} />
-                        <span className="hidden sm:inline">Load</span>
-                      </button>
-                      <input 
-                        ref={fileInputRef}
-                        type="file" 
-                        accept=".json" 
-                        className="hidden" 
-                        onChange={handleLoadConfig}
-                      />
-                    </div>
+                  {/* Left: Save/Load (Matched width to Atlas Preview above) */}
+                  <div className="w-full md:w-[260px] flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={handleSaveConfig}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Save Configuration"
+                    >
+                      <Download size={14} />
+                      <span>Save</span>
+                    </button>
+                    <div className="w-px h-4 bg-gray-700 mx-1"></div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Load Configuration"
+                    >
+                      <Upload size={14} />
+                      <span>Load</span>
+                    </button>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept=".json" 
+                      className="hidden" 
+                      onChange={handleLoadConfig}
+                    />
                   </div>
 
-                  {/* Right: Search Field (Matched width to Docs+Optimize) */}
+                  {/* Right: Search Field (Matched width to Docs+Optimize above) */}
                   <div className="w-full md:w-[420px] relative group">
                     <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-500 group-focus-within:text-spine-accent transition-colors">
                       <Search size={14} />
