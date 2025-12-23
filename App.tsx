@@ -1089,6 +1089,9 @@ export default function App() {
         setBoneDocs={setBoneDocs}
         generalNotes={generalNotes}
         setGeneralNotes={setGeneralNotes}
+        masterSkins={report?.skins || []}
+        masterEvents={report?.events || []}
+        masterBones={report?.controlBones || []}
         safetyBuffer={optimizationBuffer}
         resizedCount={optimizationStats.resizedCount}
         optimizationReduction={optimizationStats.reduction}
