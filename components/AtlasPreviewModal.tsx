@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AtlasPage, OptimizationTask, PackedRect } from '../types';
 import { packAtlases } from '../utils/atlasPacker';
-import { X, Map as MapIcon, ChevronLeft, ChevronRight, Layers, Box, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Map as MapIcon, ChevronLeft, ChevronRight, Layers, Box, AlertTriangle, Maximize2, Minimize2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface AtlasPreviewModalProps {
@@ -23,10 +23,15 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
   const [isOptimized, setIsOptimized] = useState(true);
   const [maxSize, setMaxSize] = useState(2048);
   
+  // High-Performance Bitmap Cache
+  const [bitmapCache, setBitmapCache] = useState<Map<string, ImageBitmap>>(new Map());
+  const [isCacheReady, setIsCacheReady] = useState(false);
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const renderRequestId = useRef<number | null>(null);
   
   const [rendering, setRendering] = useState(false);
   const [hoveredRect, setHoveredRect] = useState<PackedRect | null>(null);
@@ -41,16 +46,68 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
     });
   }, [tasks, maxSize, isOptimized]);
 
-  // Packing Logic
+  // 1. ImageBitmap Lifecycle & Parallel Decoding
+  useEffect(() => {
+    if (!isOpen || tasks.length === 0) {
+        setIsCacheReady(false);
+        return;
+    }
+
+    let isActive = true;
+    // Temporary map for this effect cycle
+    const localCache = new Map<string, ImageBitmap>();
+
+    const decodeImages = async () => {
+        setRendering(true);
+        setIsCacheReady(false);
+
+        try {
+            // Parallelize decoding
+            await Promise.all(tasks.map(async (task) => {
+                try {
+                    // Create bitmap directly from blob (highly optimized by browser)
+                    const bmp = await createImageBitmap(task.blob);
+                    if (isActive) {
+                        localCache.set(task.relativePath, bmp);
+                    } else {
+                        bmp.close(); // Cleanup if cancelled
+                    }
+                } catch (err) {
+                    console.error(`Failed to decode bitmap for ${task.fileName}`, err);
+                }
+            }));
+
+            if (isActive) {
+                setBitmapCache(localCache);
+                setIsCacheReady(true);
+                setRendering(false);
+            }
+        } catch (e) {
+            console.error("Batch decoding error", e);
+            setRendering(false);
+        }
+    };
+
+    decodeImages();
+
+    // Cleanup: Invalidate cache and close bitmaps to free GPU memory
+    return () => {
+        isActive = false;
+        localCache.forEach(bmp => bmp.close());
+        setBitmapCache(new Map());
+        setIsCacheReady(false);
+    };
+  }, [isOpen, tasks]); // Only re-run if modal opens or tasks array identity changes
+
+  // 2. Packing Logic
   useEffect(() => {
     if (!isOpen) {
         setPages([]);
         return;
     }
     
-    // Delay packing to allow UI/Modal to fully render and settle dimensions.
+    // Delay packing slightly to allow UI to settle, though calculation is fast
     const timer = setTimeout(() => {
-        // Prepare tasks based on selected view mode
         const packerTasks = tasks.map(t => ({
             ...t,
             targetWidth: isOptimized ? t.targetWidth : t.originalWidth,
@@ -60,80 +117,83 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
         const result = packAtlases(packerTasks, maxSize, 2);
         setPages(result);
         setCurrentPageIdx(0); 
-    }, 50);
+    }, 10);
 
     return () => clearTimeout(timer);
   }, [isOpen, tasks, isOptimized, maxSize]);
 
-
-  // Render Main Canvas
+  // 3. Batched Drawing Loop (requestAnimationFrame)
   useEffect(() => {
-    if (!isOpen || !pages[currentPageIdx] || !canvasRef.current) return;
+    if (!isOpen || !isCacheReady || !pages[currentPageIdx] || !canvasRef.current) return;
     
     const page = pages[currentPageIdx];
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false }); // alpha: false for slight perf boost
     
     if (!ctx) return;
 
+    // Cancel any previous render loop
+    if (renderRequestId.current) {
+        cancelAnimationFrame(renderRequestId.current);
+    }
+
     setRendering(true);
-    let isMounted = true; // Track effect validity to prevent ghost draws
     
-    // Clear
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Background Checkboard (optional visual aid)
+    // Reset Canvas
     ctx.fillStyle = '#1e1e23';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw boundary
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, canvas.width, canvas.height);
 
-    const drawImages = async () => {
-      for (const item of page.items) {
-        if (!isMounted) return;
+    // Setup Batching
+    const items = page.items;
+    const totalItems = items.length;
+    const BATCH_SIZE = totalItems > 200 ? 50 : totalItems; // Use batching only for large sets
+    let currentIndex = 0;
 
-        const img = new Image();
-        // Use the blob directly from the task
-        const url = URL.createObjectURL(item.task.blob);
-        
-        await new Promise<void>((resolve) => {
-          img.onload = () => {
-             if (isMounted) {
-                 // Draw image
-                 ctx.drawImage(img, item.x, item.y, item.w, item.h);
-                 
-                 // Draw outline
-                 ctx.strokeStyle = 'rgba(100, 255, 100, 0.3)';
-                 ctx.lineWidth = 1;
-                 ctx.strokeRect(item.x, item.y, item.w, item.h);
-             }
-             URL.revokeObjectURL(url);
-             resolve();
-          };
-          img.onerror = () => {
-            if (isMounted) {
-                // Fallback placeholder
+    const renderBatch = () => {
+        const end = Math.min(currentIndex + BATCH_SIZE, totalItems);
+
+        for (let i = currentIndex; i < end; i++) {
+            const item = items[i];
+            const bmp = bitmapCache.get(item.task.relativePath);
+
+            if (bmp) {
+                // High-speed draw from GPU texture (ImageBitmap)
+                ctx.drawImage(bmp, item.x, item.y, item.w, item.h);
+                
+                // Draw outline
+                ctx.strokeStyle = 'rgba(100, 255, 100, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(item.x, item.y, item.w, item.h);
+            } else {
+                // Fallback if cache missed
                 ctx.fillStyle = '#333';
                 ctx.fillRect(item.x, item.y, item.w, item.h);
                 ctx.strokeStyle = 'red';
                 ctx.strokeRect(item.x, item.y, item.w, item.h);
             }
-            URL.revokeObjectURL(url);
-            resolve();
-          };
-          img.src = url;
-        });
-      }
-      if (isMounted) setRendering(false);
+        }
+
+        currentIndex = end;
+
+        if (currentIndex < totalItems) {
+            renderRequestId.current = requestAnimationFrame(renderBatch);
+        } else {
+            setRendering(false);
+            renderRequestId.current = null;
+        }
     };
 
-    drawImages();
+    // Start Loop
+    renderRequestId.current = requestAnimationFrame(renderBatch);
 
-    return () => { isMounted = false; };
-  }, [isOpen, currentPageIdx, pages, maxSize]);
+    return () => {
+        if (renderRequestId.current) cancelAnimationFrame(renderRequestId.current);
+    };
+  }, [isOpen, currentPageIdx, pages, maxSize, isCacheReady, bitmapCache]); // Dependencies dictate redraws
 
   // Render Highlight Overlay
   useEffect(() => {
@@ -173,28 +233,29 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
     const canvasX = (e.clientX - rect.left) * scaleX;
     const canvasY = (e.clientY - rect.top) * scaleY;
     
-    // Find intersection (iterate backwards to find top-most if overlap existed, though atlas is usually non-overlapping)
-    const found = activePage.items.find(item => 
-        canvasX >= item.x && canvasX <= item.x + item.w &&
-        canvasY >= item.y && canvasY <= item.y + item.h
-    );
+    // Find intersection (iterate backwards to find top-most if overlap existed)
+    // Reverse loop for z-index correctness (though atlas implies no overlap)
+    let found: PackedRect | undefined;
+    for (let i = activePage.items.length - 1; i >= 0; i--) {
+        const item = activePage.items[i];
+        if (canvasX >= item.x && canvasX <= item.x + item.w &&
+            canvasY >= item.y && canvasY <= item.y + item.h) {
+            found = item;
+            break;
+        }
+    }
     
     setHoveredRect(found || null);
 
     if (found && containerRef.current) {
         const containerRect = containerRef.current.getBoundingClientRect();
-        
-        // Cursor Position relative to container
         const cursorX = e.clientX - containerRect.left;
         const cursorY = e.clientY - containerRect.top;
-
-        // Container Dimensions
         const containerW = containerRect.width;
         const containerH = containerRect.height;
 
-        // Tooltip Dimensions (Measure active or fallback)
-        let tooltipW = 220; // Min width fallback
-        let tooltipH = 120; // Height estimate fallback
+        let tooltipW = 220; 
+        let tooltipH = 120;
         
         if (tooltipRef.current) {
             const tRect = tooltipRef.current.getBoundingClientRect();
@@ -203,22 +264,12 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
         }
 
         const margin = 20;
-        
-        // Initial Target: Bottom-Right of cursor
         let targetX = cursorX + margin;
         let targetY = cursorY + margin;
 
-        // Horizontal Edge Detection (Flip to Left)
-        if (targetX + tooltipW > containerW) {
-            targetX = cursorX - tooltipW - margin;
-        }
+        if (targetX + tooltipW > containerW) targetX = cursorX - tooltipW - margin;
+        if (targetY + tooltipH > containerH) targetY = cursorY - tooltipH - margin;
 
-        // Vertical Edge Detection (Flip to Top)
-        if (targetY + tooltipH > containerH) {
-            targetY = cursorY - tooltipH - margin;
-        }
-
-        // Pixel Rounding for sharp text rendering
         setTooltipPos({ x: Math.round(targetX), y: Math.round(targetY) });
     } else {
         setTooltipPos(null);
@@ -387,9 +438,14 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
 
           {/* Canvas Area */}
           <div className="flex-1 bg-black/50 relative flex items-center justify-center p-4 overflow-hidden">
-             {rendering && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/20">
-                   <span className="text-spine-accent font-bold animate-pulse">Rendering...</span>
+             
+             {/* Loading / Rendering Indicator */}
+             {(!isCacheReady || rendering) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/60 backdrop-blur-sm pointer-events-none">
+                   <Loader2 size={32} className="text-spine-accent animate-spin mb-2" />
+                   <span className="text-spine-accent font-bold animate-pulse text-sm">
+                       {!isCacheReady ? "Decoding Images..." : "Rendering Atlas..."}
+                   </span>
                 </div>
              )}
              
