@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AtlasPage, OptimizationTask, PackedRect } from '../types';
+import { PACKER_WORKER_CODE } from '../utils/atlasPacker';
 import { X, Map as MapIcon, ChevronLeft, ChevronRight, Layers, Box, AlertTriangle, Maximize2, Minimize2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -95,7 +96,7 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
     };
   }, [isOpen, tasks]);
 
-  // 2. Web Worker Packing Logic
+  // 2. Web Worker Packing Logic (Inline Blob Worker)
   useEffect(() => {
     if (!isOpen || tasks.length === 0) {
         setPages([]);
@@ -105,7 +106,10 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
     setIsCalculating(true);
     setPages([]); // Clear current view while calculating
 
-    const worker = new Worker(new URL('../utils/packer.worker.ts', import.meta.url), { type: 'module' });
+    // Create Inline Worker from String Constant
+    const blob = new Blob([PACKER_WORKER_CODE], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+    const worker = new Worker(workerUrl);
 
     // Prepare tasks for worker:
     // 1. Map dimensions based on isOptimized toggle
@@ -148,16 +152,19 @@ export const AtlasPreviewModal: React.FC<AtlasPreviewModalProps> = ({
         
         setIsCalculating(false);
         worker.terminate();
+        URL.revokeObjectURL(workerUrl);
     };
 
     worker.onerror = (e) => {
         console.error("Worker Error:", e);
         setIsCalculating(false);
         worker.terminate();
+        URL.revokeObjectURL(workerUrl);
     };
 
     return () => {
         worker.terminate();
+        URL.revokeObjectURL(workerUrl);
     };
   }, [isOpen, tasks, isOptimized, maxSize]);
 
