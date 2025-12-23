@@ -661,7 +661,7 @@ export const TrackConfigModal: React.FC<TrackConfigModalProps> = ({
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                             >
                                 <Zap size={14} className="text-yellow-400" />
-                                Add Events ({eventDocs.length})
+                                Add Events ({visibleSections.has('events') ? eventDocs.length : masterEvents.length})
                             </button>
                         )}
                         {!visibleSections.has('skins') && (
@@ -670,7 +670,7 @@ export const TrackConfigModal: React.FC<TrackConfigModalProps> = ({
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                             >
                                 <Layers size={14} className="text-blue-400" />
-                                Add Skins ({skinDocs.length})
+                                Add Skins ({visibleSections.has('skins') ? skinDocs.length : masterSkins.length})
                             </button>
                         )}
                         {!visibleSections.has('bones') && (
@@ -679,7 +679,7 @@ export const TrackConfigModal: React.FC<TrackConfigModalProps> = ({
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                             >
                                 <Bone size={14} className="text-gray-400" />
-                                Add Control Bones ({boneDocs.length})
+                                Add Control Bones ({visibleSections.has('bones') ? boneDocs.length : masterBones.length})
                             </button>
                         )}
                         {!visibleSections.has('notes') && (
