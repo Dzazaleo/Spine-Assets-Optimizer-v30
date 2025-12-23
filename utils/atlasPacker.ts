@@ -26,8 +26,6 @@ class MaxRectsPacker {
   insert(task: OptimizationTask): PackedRect | null {
     // Add padding to required dimensions (only right/bottom needs considering for fit, 
     // but logic treats padding as space between, so we effectively add it to the width)
-    // We add padding to the item size during placement check, but store actual size.
-    // Actually, simpler: consume width+padding space.
     
     const requiredW = task.targetWidth + this.padding;
     const requiredH = task.targetHeight + this.padding;
@@ -74,15 +72,41 @@ class MaxRectsPacker {
 
   private placeRect(rect: Rect) {
     // CRITICAL FIX: Loop must check current length because array is modified (spliced) inside loop.
-    // Using a cached length (const len = this.freeRects.length) causes undefined access 
-    // when array shrinks.
+    // Using a cached length (const len = this.freeRects.length) causes undefined access when array shrinks.
     for (let i = 0; i < this.freeRects.length; i++) {
       if (this.splitFreeNode(this.freeRects[i], rect)) {
         this.freeRects.splice(i, 1);
         i--;
       }
     }
-    // Prune small rects? Not strictly necessary for this visualization
+    // Perform pruning to remove contained rectangles and prevent explosion
+    this.pruneFreeList();
+  }
+
+  private pruneFreeList() {
+    // Go through the free list and remove any rectangle that is redundant (completely contained within another)
+    for (let i = 0; i < this.freeRects.length; i++) {
+      for (let j = i + 1; j < this.freeRects.length; j++) {
+        const rect1 = this.freeRects[i];
+        const rect2 = this.freeRects[j];
+
+        if (this.isContained(rect1, rect2)) {
+          this.freeRects.splice(i, 1);
+          i--;
+          break;
+        }
+        if (this.isContained(rect2, rect1)) {
+          this.freeRects.splice(j, 1);
+          j--;
+        }
+      }
+    }
+  }
+
+  private isContained(a: Rect, b: Rect): boolean {
+    return a.x >= b.x && a.y >= b.y && 
+           a.x + a.width <= b.x + b.width && 
+           a.y + a.height <= b.y + b.height;
   }
 
   private splitFreeNode(freeNode: Rect, usedNode: Rect): boolean {
@@ -149,7 +173,6 @@ class MaxRectsPacker {
 
 export function packAtlases(tasks: OptimizationTask[], maxSize: number = 2048, padding: number = 2): AtlasPage[] {
   // 1. Sort tasks by height descending (common heuristic for shelf/maxrects)
-  // Also consider width or area, but height is robust.
   const sortedTasks = [...tasks].sort((a, b) => b.targetHeight - a.targetHeight);
   
   const pages: AtlasPage[] = [];
@@ -166,9 +189,8 @@ export function packAtlases(tasks: OptimizationTask[], maxSize: number = 2048, p
     for (const task of remaining) {
       // Basic check if single item exceeds atlas
       if (task.targetWidth > maxSize || task.targetHeight > maxSize) {
-         // Force fit / shrink or just place alone (but logic prevents placement if strictly > max)
-         // For now, if it exceeds, we skip or handle gracefully.
-         // Let's assume we place it but it might clip.
+         // Skip items that physically cannot fit
+         continue; 
       }
 
       const rect = packer.insert(task);
@@ -193,13 +215,15 @@ export function packAtlases(tasks: OptimizationTask[], maxSize: number = 2048, p
       efficiency
     });
 
-    remaining.splice(0, remaining.length, ...didntFit);
-    
-    // Safety break to prevent infinite loops if an item is simply too big
-    if (pageItems.length === 0 && didntFit.length > 0) {
-      console.warn("Items too large for atlas:", didntFit);
-      break; 
+    // If we made no progress but still have items, it means remaining items are too big or an error occurred.
+    // However, the maxSize check above handles single-item-too-big.
+    // If we packed nothing this round, we must break to avoid infinite loop.
+    if (pageItems.length === 0 && didntFit.length === remaining.length) {
+      console.warn("Packing stalled. Remaining items cannot be packed:", didntFit);
+      break;
     }
+
+    remaining.splice(0, remaining.length, ...didntFit);
   }
 
   return pages;
