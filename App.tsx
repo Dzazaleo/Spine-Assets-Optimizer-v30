@@ -875,7 +875,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleQuickAtlasPreview}
-                    className="w-full md:w-[260px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-gray-200 bg-gray-800 border border-gray-600 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-500 transition-all shadow-sm group"
+                    className="w-full md:w-[273px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-gray-200 bg-gray-800 border border-gray-600 rounded-xl hover:bg-gray-700 hover:text-white hover:border-gray-500 transition-all shadow-sm group"
                   >
                     <MapIcon size={16} className="text-blue-400 group-hover:text-blue-300" />
                     <span>Atlas Preview</span>
@@ -908,7 +908,7 @@ export default function App() {
                 {/* ROW 2: Secondary Controls */}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                   {/* Left: Save/Load (Matched width to Atlas Preview above) */}
-                  <div className="w-full md:w-[260px] flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700 shadow-sm">
+                  <div className="w-full md:w-[273px] flex items-center bg-gray-800 p-1 rounded-lg border border-gray-700 shadow-sm">
                     <button
                       type="button"
                       onClick={handleSaveConfig}
