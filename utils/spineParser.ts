@@ -671,6 +671,22 @@ export function analyzeSpineData(
   // 1. Collect from Animations (isSetupPose=false). This establishes the "Active" max scale.
   // 2. Collect from Setup Pose (isSetupPose=true). This participates in Max logic (can override Anim if larger).
   
+  // NEW: Identify Animated Components (Slots and Bones with any timelines)
+  // This allows us to exclude Setup Pose from max-size calculations if the asset is dynamic.
+  const touchedSlots = new Set<string>();
+  const touchedBones = new Set<string>();
+
+  if (json.animations) {
+    Object.values(json.animations).forEach(anim => {
+        if (anim.slots) {
+            Object.keys(anim.slots).forEach(s => touchedSlots.add(s));
+        }
+        if (anim.bones) {
+            Object.keys(anim.bones).forEach(b => touchedBones.add(b));
+        }
+    });
+  }
+  
   const globalStatsMap = new Map<string, GlobalAssetStat>();
 
   const updateGlobalStats = (img: FoundImageResult, animName: string) => {
@@ -719,7 +735,16 @@ export function analyzeSpineData(
   // PASS 2: Process Setup Pose (Participates in Max Logic)
   results.filter(r => r.isSetupPose).forEach(anim => {
       anim.foundImages.forEach(img => {
-          updateGlobalStats(img, anim.animationName);
+          // EXCLUSION RULE: Only allow Setup Pose to dictate max size if the asset is completely static.
+          // If the slot or any controlling bone has keyframes in ANY animation, we rely solely on 
+          // the animation-derived maximums (Pass 1).
+          const isSlotAnimated = touchedSlots.has(img.slotName);
+          // bonePath format: "bone1/bone2/bone3"
+          const isBoneAnimated = img.bonePath.split('/').some(b => touchedBones.has(b));
+          
+          if (!isSlotAnimated && !isBoneAnimated) {
+             updateGlobalStats(img, anim.animationName);
+          }
       });
   });
 
